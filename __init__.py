@@ -65,12 +65,18 @@ class Loop:
 		return '<Loop #{0.loop_id}: "{0.name}", {0.beats_per_measure} beats per measure, {0.measures} measures, {0.event_count} events>'.format(self)
 
 	def print_events(self):
+		"""
+		Nicely formatted event printing
+		"""
 		for i in range(len(self.events)):
 			print("{:3d}: ".format(i), end = "")
 			print("{:.3f}  0x{:x} {} {}".format(self.events[i][0], *self.events[i][1]))
 
 
 class Loops:
+	"""
+	Interface to sqlite database in which loops are saved.
+	"""
 
 	_connection = None
 	_loop_names = None
@@ -274,8 +280,8 @@ class Looper:
 			self.client.set_blocksize_callback(self._blocksize_callback)
 			self.client.set_samplerate_callback(self._samplerate_callback)
 			self.client.set_process_callback(self._process_callback)
-			self.client.set_shutdown_callback(self.shutdown_callback)
-			self.client.set_xrun_callback(self.xrun_callback)
+			self.client.set_shutdown_callback(self._shutdown_callback)
+			self.client.set_xrun_callback(self._xrun_callback)
 			self.client.activate()
 			self.client.get_ports()
 			self.out_port = self.client.midi_outports.register('out')
@@ -325,6 +331,11 @@ class Looper:
 			self.remeasure()
 
 	def remeasure(self):
+		"""
+		Determines how many beats to loop based on the beats-per-measure and total
+		number of beats in all active loops. Called from "append_loop" and
+		"extend_loops" functions.
+		"""
 		if self.loops:
 			try:
 				last_beat = max([loop.last_beat for loop in self.loops if loop.play])
@@ -457,7 +468,7 @@ class Looper:
 			))
 			raise CallbackExit
 
-	def shutdown_callback(self, status, reason):
+	def _shutdown_callback(self, status, reason):
 		"""
 		The argument status is of type jack.Status.
 		"""
@@ -465,7 +476,7 @@ class Looper:
 		if self.state != Looper.INACTIVE:
 			raise JackShutdownError
 
-	def xrun_callback(self, delayed_usecs):
+	def _xrun_callback(self, delayed_usecs):
 		"""
 		The callback argument is the delay in microseconds due to the most recent XRUN
 		occurrence. The callback is supposed to raise CallbackExit on error.
@@ -475,24 +486,37 @@ class Looper:
 
 
 class JackShutdownError(Exception):
-
-	pass
+	"""
+	Used to notify calling process that the Jack server has shutdown.
+	"""
 
 
 class FakeClient:
-
+	"""
+	A Drop-in replacement for Jack-Client's Client class,
+	used strictly for testing.
+	"""
 	samplerate = 48000
 	blocksize = 1024
 
 
 class FakePort:
-
+	"""
+	A Drop-in replacement for Jack-Client's OwnMIDIPort class,
+	used strictly for testing.
+	"""
 	rc = 0
 
 	def clear_buffer(self):
+		"""
+		Fake -out clear_buffer before writing MIDI data.
+		"""
 		pass
 
 	def write_midi_event(self, offset, tup):
+		"""
+		Pretends to write to a midi port, but just prints data to the console.
+		"""
 		print('MIDI EVENT: {:7d}  0x{:x}  {:d}  {:d}'.format(offset, tup[0], tup[1], tup[2]))
 		self.rc += 1
 
