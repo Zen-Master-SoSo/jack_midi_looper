@@ -266,7 +266,7 @@ class Looper:
 		self._bpm = DEFAULT_BEATS_PER_MINUTE
 		self.beats_per_measure = None
 		self.beat = 0.0
-		self.last_beat = 0.0
+		self.loop_len_beats = 0.0
 		self.loops = []
 		self.state = Looper.INACTIVE
 		self.__real_process_callback = self._null_process_callback
@@ -340,12 +340,12 @@ class Looper:
 			try:
 				last_beat = max([loop.last_beat for loop in self.loops if loop.play])
 			except ValueError:
-				self.last_beat = 0.0
+				self.loop_len_beats = 0.0
 			else:
-				self.last_beat = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
+				self.loop_len_beats = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
 		else:
-			self.last_beat = 0.0
-		if self.beat > self.last_beat:
+			self.loop_len_beats = 0.0
+		if self.beat > self.loop_len_beats:
 			self.beat = 0.0
 
 	def loop(self, loop_id):
@@ -416,11 +416,11 @@ class Looper:
 					for evt in np.sort(events_this_block, kind="heapsort", order="beat"):
 						offset = int((evt['beat'] - self.beat) * self.samples_per_beat)
 						self.out_port.write_midi_event(offset, evt['msg'])
-				if last_beat < self.last_beat:
+				if last_beat < self.loop_len_beats:
 					self.beat = last_beat
 					break
-				last_beat -= self.last_beat
-				self.beat = 0.0
+				last_beat -= self.loop_len_beats
+				self.beat -= self.loop_len_beats
 
 	def _stop_process_callback(self, frames):
 		"""
@@ -496,8 +496,8 @@ class FakeClient:
 	A Drop-in replacement for Jack-Client's Client class,
 	used strictly for testing.
 	"""
-	samplerate = 48000
-	blocksize = 1024
+	samplerate = 100
+	blocksize = 33
 
 
 class FakePort:
