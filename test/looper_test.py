@@ -2,21 +2,23 @@
 #
 #  Copyright 2024 liyang <liyang@veronica>
 #
-import logging
+import sys, os, argparse, logging
 from appdirs import user_config_dir
-from jack import JackError
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtWidgets import QVBoxLayout
+from PyQt5.QtWidgets import QShortcut
+from PyQt5.QtGui import QKeySequence
+from qt_extras import DevilBox
+from jack import JackError
 from jack_midi_looper import Loops
+from jack_midi_looper.looper_widget import LooperWidget
 
 
 class LooperTestWindow(QMainWindow):
 
 	def __init__(self, loops):
 		super().__init__()
-		from jack_midi_looper.looper_widget import LooperWidget
-		from PyQt5.QtWidgets import QShortcut
-		from PyQt5.QtGui import QKeySequence
 		self.setWindowTitle('Looper')
 		self.looper_widget = LooperWidget(self, loops)
 		self.setCentralWidget(self.looper_widget)
@@ -34,9 +36,6 @@ class LooperTestWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-	import sys, os, argparse
-	from PyQt5.QtWidgets import QApplication
-	from qt_extras import DevilBox
 
 	p = argparse.ArgumentParser()
 	p.epilog = """

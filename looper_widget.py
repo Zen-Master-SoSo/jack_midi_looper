@@ -14,8 +14,7 @@ from PyQt5.QtWidgets import QGridLayout
 
 from qt_extras import ShutUpQT
 
-from jack_midi_looper import Loops
-from jack_midi_looper.looper import Looper
+from jack_midi_looper import Loops, Looper
 
 
 class LooperWidget(QFrame):
