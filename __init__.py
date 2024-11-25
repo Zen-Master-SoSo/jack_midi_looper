@@ -1,4 +1,4 @@
-#  jack_midi_looper/utils/loops.py
+#  jack_midi_looper/__init__.py
 #
 #  Copyright 2024 liyang <liyang@veronica>
 #
@@ -221,4 +221,4 @@ if __name__ == "__main__":
 	print('Random loop:')
 	print(loops.random_loop())
 
-#  end jack_midi_looper/utils/loops.py
+#  end jack_midi_looper/__init__.py

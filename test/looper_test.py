@@ -1,22 +1,24 @@
-#  jack_midi_looper/looper.py
+#  jack_midi_looper/test/looper_test.py
 #
 #  Copyright 2024 liyang <liyang@veronica>
 #
 import logging
+from appdirs import user_config_dir
 from jack import JackError
 from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtWidgets import QVBoxLayout
+from jack_midi_looper import Loops
 
 
 class LooperTestWindow(QMainWindow):
 
-	def __init__(self):
+	def __init__(self, loops):
 		super().__init__()
 		from jack_midi_looper.looper_widget import LooperWidget
 		from PyQt5.QtWidgets import QShortcut
 		from PyQt5.QtGui import QKeySequence
 		self.setWindowTitle('Looper')
-		self.looper_widget = LooperWidget(self)
+		self.looper_widget = LooperWidget(self, loops)
 		self.setCentralWidget(self.looper_widget)
 		self.looper_widget.layout().setContentsMargins(8,8,8,8)
 		self.quit_shortcut = QShortcut(QKeySequence('Ctrl+Q'), self)
@@ -29,26 +31,6 @@ class LooperTestWindow(QMainWindow):
 	def system_signal(self, sig, frame):
 		logging.debug("Caught signal - shutting down")
 		self.close()
-
-
-class Pause:
-	"""
-	A context manager that remembers what state a Looper is in,
-	stops it, lets you do work, and then restarts it if it had
-	been running.
-	"""
-
-	def __init__(self, looper):
-		self.looper = looper
-		self.previous_state = looper.state
-
-	def __enter__(self):
-		self.looper.stop()
-
-	def __exit__(self, *_):
-		if self.previous_state == Looper.PLAYING:
-			self.looper.play()
-
 
 
 if __name__ == "__main__":
@@ -73,8 +55,14 @@ if __name__ == "__main__":
 	except KeyError:
 		pass
 	app = QApplication([])
+
 	try:
-		main_window = LooperTestWindow()
+		dbpath = os.path.join(user_config_dir(), 'ZenSoSo', 'midibanks.db')
+		try:
+			os.mkdir(dbpath)
+		except FileExistsError:
+			pass
+		main_window = LooperTestWindow(Loops(dbpath))
 	except JackError:
 		DevilBox('Could not connect to JACK server. Is it running?')
 		sys.exit(1)
@@ -82,4 +70,4 @@ if __name__ == "__main__":
 	sys.exit(app.exec())
 
 
-#  end jack_midi_looper/gui.py
+#  end jack_midi_looper/test/looper_test.py

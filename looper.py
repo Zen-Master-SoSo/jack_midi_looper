@@ -7,7 +7,7 @@ import logging
 import numpy as np
 from math import ceil
 from jack import Client, CallbackExit
-from jack_midi_looper.loops import Loop
+from jack_midi_looper import Loop
 
 DEFAULT_BEATS_PER_MINUTE = 120
 
@@ -55,47 +55,36 @@ class Looper:
 		self._bpm = val
 		self.rescale()
 
-	def load_loop(self, loop_id):
+	def append_loop(self, loop):
 		"""
-		Loads a single loop, if not already loaded.
-		Returns the loaded loop.
+		Loads a single loop.
 		Throws up if the loop's beats per measure does not
 		match all the loaded loop's beats per measure.
+		Returns appended loop for chaining.
 		"""
-		loop = self._loaded_loop(loop_id)
-		if loop is None:
-			loop = Loop(loop_id)
-			if self.beats_per_measure is not None and \
-				loop.beats_per_measure != self.beats_per_measure:
-				raise Exception("beats_per_measure mismatch")
-			with Pause(self):
-				self.beats_per_measure = loop.beats_per_measure
-				self.loops.append(loop)
-				self.remeasure()
+		if self.beats_per_measure is not None and \
+			loop.beats_per_measure != self.beats_per_measure:
+			raise Exception("beats_per_measure mismatch")
+		with Pause(self):
+			self.beats_per_measure = loop.beats_per_measure
+			self.loops.append(loop)
+			self.remeasure()
 		return loop
 
-	def load_loops(self, loop_ids):
+	def extend_loops(self, loop_list):
 		"""
-		Loads multiple loops, if not already loaded.
-		Returns a list of the loops loaded.
-		Ignores any loop if its beats per measure does not
-		match previous loaded loop's beats per measure,
-		(including the first loop loaded by this function if
-		no other loops are loaded)
+		Loads multiple loops.
+		Throws up if any loop's beats per measure does not
+		match all the loaded loop's beats per measure.
 		"""
-		loops_to_load = set(loop_ids) ^ set(self.loaded_loop_ids())
-		if loops_to_load:
-			new_loops = [Loop(loop_id) for loop_id in loops_to_load]
-			if self.beats_per_measure is None:
-				self.beats_per_measure = new_loops[0].beats_per_measure
-			valid_new_loops = [ loop for loop in new_loops \
-								if loop.beats_per_measure == self.beats_per_measure ]
-			if valid_new_loops:
-				with Pause(self):
-					self.loops.extend(valid_new_loops)
-					self.remeasure()
-				return valid_new_loops
-		return []
+		if self.beats_per_measure is None:
+			self.beats_per_measure = loop_list[0].beats_per_measure
+		for loop in loop_list:
+			if loop.beats_per_measure != self.beats_per_measure:
+				raise Exception("beats_per_measure mismatch")
+		with Pause(self):
+			self.loops.extend(loop_list)
+			self.remeasure()
 
 	def remeasure(self):
 		if self.loops:
@@ -107,7 +96,7 @@ class Looper:
 			self.beat = 0.0
 			self.last_beat = 0.0
 
-	def _loaded_loop(self, loop_id):
+	def loop(self, loop_id):
 		for loop in self.loops:
 			if loop.loop_id == loop_id:
 				return loop

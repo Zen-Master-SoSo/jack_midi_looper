@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QGridLayout
 
 from qt_extras import ShutUpQT
 
-from jack_midi_looper.loops import Loops
+from jack_midi_looper import Loops
 from jack_midi_looper.looper import Looper
 
 
@@ -23,13 +23,14 @@ class LooperWidget(QFrame):
 	single_loop	= False # Set True to play one loop at a time
 	columns = 6
 
-	def __init__(self, parent):
+	def __init__(self, parent, loops):
 		super().__init__(parent)
+		self.loops = loops
 		my_dir = os.path.dirname(__file__)
 		with ShutUpQT():
 			uic.loadUi(os.path.join(my_dir, 'res', 'looper_widget.ui'), self)
 		self.cmb_group.addItem('')
-		self.cmb_group.addItems(Loops.groups())
+		self.cmb_group.addItems(self.loops.groups())
 		self.cmb_group.currentTextChanged.connect(self.group_changed)
 		self.beat_spinner.valueChanged.connect(self.set_bpm)
 		self.play_button.toggled.connect(self.play_toggle)
@@ -60,17 +61,18 @@ class LooperWidget(QFrame):
 		if text == '':
 			self.play_button.setEnabled(False)
 			return
-		ord_ = 0
-		ids_to_load = Loops.group_loops(text)
-		self.looper.load_loops([tup[0] for tup in ids_to_load])
-		for tup in ids_to_load:
-			button = QPushButton(tup[1], self.frm_loops)
-			button.setFont(self.loops_font)
-			button.setCheckable(True)
-			button.loop_id = tup[0]
-			button.toggled.connect(partial(self.loop_select, tup[0]))
-			self.loops_layout.addWidget(button, int(ord_ / self.columns), ord_ % self.columns)
-			ord_ += 1
+		new_loops = [self.loops.loop(tup[0]) for tup in self.loops.group_loops(text)]
+		if new_loops:
+			self.looper.extend_loops(new_loops)
+			ord_ = 0
+			for loop in new_loops:
+				button = QPushButton(loop.name, self.frm_loops)
+				button.setFont(self.loops_font)
+				button.setCheckable(True)
+				button.loop_id = loop.loop_id
+				button.toggled.connect(partial(self.loop_select, loop.loop_id))
+				self.loops_layout.addWidget(button, int(ord_ / self.columns), ord_ % self.columns)
+				ord_ += 1
 
 	@pyqtSlot(int, bool)
 	def loop_select(self, loop_id, state):
@@ -78,7 +80,7 @@ class LooperWidget(QFrame):
 			for button in self.frm_loops.findChildren(QPushButton):
 				if button.loop_id != loop_id:
 					button.setChecked(False)
-		self.looper.load_loop(loop_id).play = state
+		self.looper.loop(loop_id).play = state
 		self.play_button.setEnabled(self.looper.any_loop_active())
 
 	@pyqtSlot(bool)
