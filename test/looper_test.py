@@ -36,25 +36,10 @@ class LooperTestWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-
-	p = argparse.ArgumentParser()
-	p.epilog = """
-	Write your help text!
-	"""
-	p.add_argument('Filename', type=str, nargs='*', help='SFZ file[s] to include at startup')
-	p.add_argument("--verbose", "-v", action="store_true", help="Show more detailed debug information")
-	options = p.parse_args()
-
-	log_level = logging.DEBUG if options.verbose else logging.ERROR
+	log_level = logging.DEBUG
 	log_format = "[%(filename)24s:%(lineno)4d] %(levelname)-8s %(message)s"
 	logging.basicConfig(level = log_level, format = log_format)
-
-	try:
-		del os.environ['SESSION_MANAGER']
-	except KeyError:
-		pass
 	app = QApplication([])
-
 	try:
 		dbpath = os.path.join(user_config_dir(), 'ZenSoSo', 'midibanks.db')
 		try:

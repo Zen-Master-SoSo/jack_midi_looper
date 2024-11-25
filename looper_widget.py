@@ -52,25 +52,26 @@ class LooperWidget(QFrame):
 	def group_changed(self, text):
 		self.looper.stop()
 		self.looper.clear()
-		self.looper.remeasure()
 		self.play_button.setChecked(False)
+		self.play_button.setEnabled(False)
 		for button in self.frm_loops.findChildren(QPushButton):
 			self.loops_layout.removeWidget(button)
 			button.deleteLater()
 		if text == '':
-			self.play_button.setEnabled(False)
 			return
 		new_loops = [self.loops.loop(tup[0]) for tup in self.loops.group_loops(text)]
 		if new_loops:
+			new_loops.sort(key=lambda loop: loop.name)
 			self.looper.extend_loops(new_loops)
+			rows = len(new_loops) // self.columns + 1
 			ord_ = 0
 			for loop in new_loops:
-				button = QPushButton(loop.name, self.frm_loops)
+				button = QPushButton('{} ({} measures)'.format(loop.name, loop.measures), self.frm_loops)
 				button.setFont(self.loops_font)
 				button.setCheckable(True)
 				button.loop_id = loop.loop_id
 				button.toggled.connect(partial(self.loop_select, loop.loop_id))
-				self.loops_layout.addWidget(button, int(ord_ / self.columns), ord_ % self.columns)
+				self.loops_layout.addWidget(button, ord_ % rows, int(ord_ / rows))
 				ord_ += 1
 
 	@pyqtSlot(int, bool)
@@ -80,6 +81,8 @@ class LooperWidget(QFrame):
 				if button.loop_id != loop_id:
 					button.setChecked(False)
 		self.looper.loop(loop_id).play = state
+		if state:
+			self.looper.remeasure()
 		self.play_button.setEnabled(self.looper.any_loop_active())
 
 	@pyqtSlot(bool)

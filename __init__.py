@@ -292,13 +292,16 @@ class Looper:
 
 	def remeasure(self):
 		if self.loops:
-			last_beat = max([loop.last_beat for loop in self.loops])
-			self.last_beat = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
-			if self.beat > self.last_beat:
-				self.beat = 0.0
+			try:
+				last_beat = max([loop.last_beat for loop in self.loops if loop.play])
+			except ValueError:
+				self.last_beat = 0.0
+			else:
+				self.last_beat = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
 		else:
-			self.beat = 0.0
 			self.last_beat = 0.0
+		if self.beat > self.last_beat:
+			self.beat = 0.0
 
 	def loop(self, loop_id):
 		for loop in self.loops:
@@ -361,7 +364,8 @@ class Looper:
 
 	def stop_process_callback(self, frames):
 		"""
-		Sends MIDI message "All Notes Off" (0x7B) to all channels from 0 - 15
+		Sends MIDI message "All Notes Off" (0x7B) to all channels from 0 - 15,
+		and then transitions to "null_process_callback"
 		"""
 		self.out_port.clear_buffer()
 		msg = bytearray.fromhex('B07B')
