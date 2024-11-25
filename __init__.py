@@ -73,7 +73,7 @@ class Loop:
 class Loops:
 
 	_connection = None
-	_loop_ids = None
+	_loop_names = None
 	_groups = None
 
 	def __init__(self, dbfile):
@@ -222,16 +222,18 @@ class Loops:
 		"""
 		Return a list of all loop_ids in the database.
 		"""
-		if self._loop_ids is None:
-			cursor = self._connection.cursor()
-			cursor.execute('SELECT loop_id FROM loops')
-			self._loop_ids = [ row[0] for row in cursor.fetchall() ]
-		return self._loop_ids
+		return list(self.loop_names().keys())
 
 	def loop_names(self):
 		"""
 		Returns dict(loop_id:name)
 		"""
+		if self._loop_names is None:
+			cursor = self._connection.cursor()
+			cursor.execute('SELECT loop_id, name FROM loops')
+			self._loop_names = { row[0]:row[1] for row in cursor.fetchall() }
+		return self._loop_names
+
 
 	def loop(self, loop_id):
 		"""
