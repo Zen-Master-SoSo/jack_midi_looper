@@ -3,10 +3,10 @@
 #  Copyright 2024 liyang <liyang@veronica>
 #
 import os, sqlite3, glob, re, io, logging
-import numpy as np
 from math import ceil
-from appdirs import user_config_dir
 from random import choice
+import numpy as np
+from appdirs import user_config_dir
 from mido import MidiFile
 from jack import Client, CallbackExit
 
@@ -86,9 +86,15 @@ class Loops:
 			self.init_schema()
 
 	def conn(self):
+		"""
+		Public access to the database connection.
+		"""
 		return self._connection
 
 	def init_schema(self):
+		"""
+		Nukes any existing tables (if they exist) and rebuilds the database schema.
+		"""
 		self._connection.execute("DROP INDEX IF EXISTS bpm_index")
 		self._connection.execute("DROP INDEX IF EXISTS measures_index")
 		self._connection.execute("DROP INDEX IF EXISTS pitch_index")
@@ -114,10 +120,17 @@ class Loops:
 		self._connection.execute("CREATE INDEX pitch_index ON pitches (pitch)")
 
 	def delete_all(self):
+		"""
+		Deletes all loops (and thus, groups) from the database.
+		"""
 		self._connection.execute("DELETE FROM loops")
 		self._connection.commit()
 
 	def import_dirs(self, base_dir):
+		"""
+		Recursively searches for midi files in the given directory and adds each of
+		them to the database as a new Loop.
+		"""
 		cursor = self._connection.cursor()
 		loop_sql = """
 			INSERT INTO loops(loop_group, name, beats_per_measure, measures, midi_events)
@@ -186,6 +199,9 @@ class Loops:
 		return int(beats_per_measure), measure + 1, set(pitches), events
 
 	def groups(self):
+		"""
+		Returns list of strings, all group names in the database.
+		"""
 		if self._groups is None:
 			cursor = self._connection.cursor()
 			cursor.execute('SELECT DISTINCT(loop_group) FROM loops')
@@ -194,25 +210,41 @@ class Loops:
 
 	def group_loops(self, loop_group):
 		"""
-		Returns list of tuples, each containing (loop_id, name)
+		Returns list of tuples, each containing (loop_id, name), for
+		those loops belonging to the given group.
+		loop_group: (string) group name
 		"""
 		cursor = self._connection.cursor()
 		cursor.execute('SELECT loop_id, name FROM loops WHERE loop_group = ?', (loop_group,))
 		return cursor.fetchall()
 
 	def loop_ids(self):
+		"""
+		Return a list of all loop_ids in the database.
+		"""
 		if self._loop_ids is None:
 			cursor = self._connection.cursor()
 			cursor.execute('SELECT loop_id FROM loops')
 			self._loop_ids = [ row[0] for row in cursor.fetchall() ]
 		return self._loop_ids
 
+	def loop_names(self):
+		"""
+		Returns dict(loop_id:name)
+		"""
+
 	def loop(self, loop_id):
+		"""
+		Returns a Loop identified by the given loop_id.
+		"""
 		cursor = self._connection.cursor()
 		cursor.execute('SELECT * FROM loops WHERE loop_id = ?', (loop_id,))
 		return Loop(cursor.fetchone())
 
 	def random_loop(self):
+		"""
+		Returns one random Loop object.
+		"""
 		return self.loop(choice(self.loop_ids()))
 
 
@@ -229,17 +261,17 @@ class Looper:
 		self.last_beat = 0.0
 		self.loops = []
 		self.state = Looper.INACTIVE
-		self.__real_process_callback = self.null_process_callback
+		self.__real_process_callback = self._null_process_callback
 		self.client_name = client_name
 		if test:
 			self.client = FakeClient()
 			self.out_port = FakePort()
-			self.rescale()
+			self._rescale()
 		else:
 			self.client = Client(self.client_name, no_start_server=True)
-			self.client.set_blocksize_callback(self.blocksize_callback)
-			self.client.set_samplerate_callback(self.samplerate_callback)
-			self.client.set_process_callback(self.process_callback)
+			self.client.set_blocksize_callback(self._blocksize_callback)
+			self.client.set_samplerate_callback(self._samplerate_callback)
+			self.client.set_process_callback(self._process_callback)
 			self.client.set_shutdown_callback(self.shutdown_callback)
 			self.client.set_xrun_callback(self.xrun_callback)
 			self.client.activate()
@@ -257,7 +289,7 @@ class Looper:
 	@bpm.setter
 	def bpm(self, val):
 		self._bpm = val
-		self.rescale()
+		self._rescale()
 
 	def append_loop(self, loop):
 		"""
@@ -310,42 +342,57 @@ class Looper:
 		return None
 
 	def loaded_loop_ids(self):
+		"""
+		Returns the loop_id of every loaded loop.
+		"""
 		return [loop.loop_id for loop in self.loops]
 
 	def any_loop_active(self):
+		"""
+		Returns boolean True if any loaded loop's "play" attribute is True.
+		"""
 		for loop in self.loops:
 			if loop.play:
 				return True
 		return False
 
 	def clear(self):
+		"""
+		Removes all loops from the current loaded loops.
+		"""
 		self.stop()
 		self.loops = []
 		self.beats_per_measure = None
 
-	def rescale(self):
+	def _rescale(self):
 		beats_per_second = self._bpm / 60
 		self.samples_per_beat = self.client.samplerate / beats_per_second
 		seconds_per_process = self.client.blocksize / self.client.samplerate
 		self.beats_per_process = beats_per_second * seconds_per_process
 
 	def stop(self):
+		"""
+		Sends "All Notes Off" on every channel and stops playing.
+		"""
 		if self.state == Looper.INACTIVE:
 			return
 		logging.debug('STOP')
-		self.__real_process_callback = self.stop_process_callback
+		self.__real_process_callback = self._stop_process_callback
 
 	def play(self):
+		"""
+		Start playing any active loops (loops whose "play" attribute is True).
+		"""
 		if self.state == Looper.PLAYING:
 			return
 		logging.debug('PLAY')
-		self.__real_process_callback = self.play_process_callback
+		self.__real_process_callback = self._play_process_callback
 		self.state = Looper.PLAYING
 
-	def null_process_callback(self, frames):
+	def _null_process_callback(self, frames):
 		pass
 
-	def play_process_callback(self, frames):
+	def _play_process_callback(self, frames):
 		if self.any_loop_active():
 			self.out_port.clear_buffer()
 			last_beat = self.beat + self.beats_per_process
@@ -362,10 +409,10 @@ class Looper:
 				last_beat -= self.last_beat
 				self.beat = 0.0
 
-	def stop_process_callback(self, frames):
+	def _stop_process_callback(self, frames):
 		"""
 		Sends MIDI message "All Notes Off" (0x7B) to all channels from 0 - 15,
-		and then transitions to "null_process_callback"
+		and then transitions to "_null_process_callback"
 		"""
 		self.out_port.clear_buffer()
 		msg = bytearray.fromhex('B07B')
@@ -373,19 +420,28 @@ class Looper:
 			self.out_port.write_midi_event(0, msg)
 			msg[0] += 1
 		self.beat = 0.0
-		self.__real_process_callback = self.null_process_callback
+		self.__real_process_callback = self._null_process_callback
 		self.state = Looper.INACTIVE
 
 	# -----------------------
 	# JACK callbacks
 
-	def blocksize_callback(self, blocksize):
-		self.rescale()
+	def _blocksize_callback(self, blocksize):
+		"""
+		Called from jack client when blocksize changes.
+		"""
+		self._rescale()
 
-	def samplerate_callback(self, samplerate):
-		self.rescale()
+	def _samplerate_callback(self, samplerate):
+		"""
+		Called from jack client when samplerate changes.
+		"""
+		self._rescale()
 
-	def process_callback(self, frames):
+	def _process_callback(self, frames):
+		"""
+		Called from jack client once per process block
+		"""
 		try:
 			self.__real_process_callback(frames)
 		except Exception as e:
