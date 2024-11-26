@@ -264,10 +264,10 @@ class Looper:
 		self._bpm = DEFAULT_BEATS_PER_MINUTE
 		self.beats_per_measure = None
 		self.beat = 0.0
-		self.loop_len_beats = 0.0
+		self.beats_length = 0.0
 		self.loops = {} 	# dict indexed on loop_id
 		self.state = Looper.INACTIVE
-		self.__real_process_callback = self._null_process_callback
+		self._real_process_callback = self._null_process_callback
 		self.client_name = client_name
 		if test:
 			self.client = FakeClient()
@@ -352,11 +352,11 @@ class Looper:
 		logging.debug('REMEASURE')
 		if self.any_loop_active():
 			last_beat = max([loop.last_beat for loop in self.loops.values() if loop.active])
-			self.loop_len_beats = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
+			self.beats_length = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
 		else:
 			logging.debug('NO LOOPS ACTIVE')
-			self.loop_len_beats = 0.0
-		if self.beat > self.loop_len_beats:
+			self.beats_length = 0.0
+		if self.beat > self.beats_length:
 			self.beat = 0.0
 
 	def loop(self, loop_id):
@@ -399,7 +399,7 @@ class Looper:
 		if self.state == Looper.INACTIVE:
 			return
 		logging.debug('STOP')
-		self.__real_process_callback = self._stop_process_callback
+		self._real_process_callback = self._stop_process_callback
 		self.state = Looper.INACTIVE
 
 	def play(self):
@@ -409,7 +409,7 @@ class Looper:
 		if self.state == Looper.PLAYING:
 			return
 		logging.debug('PLAY')
-		self.__real_process_callback = self._play_process_callback
+		self._real_process_callback = self._play_process_callback
 		self.state = Looper.PLAYING
 
 	def _null_process_callback(self, frames):
@@ -426,11 +426,11 @@ class Looper:
 					for evt in np.sort(events_this_block, kind="heapsort", order="beat"):
 						offset = int((evt['beat'] - self.beat) * self.samples_per_beat)
 						self.out_port.write_midi_event(offset, evt['msg'])
-				if last_beat < self.loop_len_beats:
+				if last_beat < self.beats_length:
 					self.beat = last_beat
 					break
-				last_beat -= self.loop_len_beats
-				self.beat -= self.loop_len_beats
+				last_beat -= self.beats_length
+				self.beat -= self.beats_length
 
 	def _stop_process_callback(self, frames):
 		"""
@@ -443,7 +443,7 @@ class Looper:
 			self.out_port.write_midi_event(0, msg)
 			msg[0] += 1
 		self.beat = 0.0
-		self.__real_process_callback = self._null_process_callback
+		self._real_process_callback = self._null_process_callback
 
 	# -----------------------
 	# JACK callbacks
@@ -465,7 +465,7 @@ class Looper:
 		Called from jack client once per process block
 		"""
 		try:
-			self.__real_process_callback(frames)
+			self._real_process_callback(frames)
 		except Exception as e:
 			tb = e.__traceback__
 			logging.error('{} {}(), line {}: {} "{}"'.format(

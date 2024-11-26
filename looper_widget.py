@@ -14,17 +14,16 @@ from PyQt5.QtWidgets import QGridLayout
 
 from qt_extras import ShutUpQT, SigBlock
 
-from jack_midi_looper import Looper
-
 
 class LooperWidget(QFrame):
 
 	single_loop	= False # Set True to play one loop at a time
 	columns = 6
 
-	def __init__(self, parent, loops_db):
+	def __init__(self, parent, loops_db, looper):
 		super().__init__(parent)
 		self.loops_db = loops_db
+		self.looper = looper
 		my_dir = os.path.dirname(__file__)
 		with ShutUpQT():
 			uic.loadUi(os.path.join(my_dir, 'res', 'looper_widget.ui'), self)
@@ -39,7 +38,6 @@ class LooperWidget(QFrame):
 		self.frm_loops.setLayout(self.loops_layout)
 		self.loops_font = self.play_button.font()
 		self.loops_font.setPointSize(8)
-		self.looper = Looper()
 		self.update_timer = QTimer()
 		self.update_timer.setInterval(int(1 / 8 * 1000))
 		self.update_timer.timeout.connect(self.slot_timer_timeout)

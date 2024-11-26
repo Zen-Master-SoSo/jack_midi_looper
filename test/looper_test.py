@@ -11,16 +11,16 @@ from PyQt5.QtWidgets import QShortcut
 from PyQt5.QtGui import QKeySequence
 from qt_extras import DevilBox
 from jack import JackError
-from jack_midi_looper import LoopsDB
+from jack_midi_looper import LoopsDB, Looper
 from jack_midi_looper.looper_widget import LooperWidget
 
 
 class LooperTestWindow(QMainWindow):
 
-	def __init__(self, loops):
+	def __init__(self, loopsdb):
 		super().__init__()
 		self.setWindowTitle('Looper')
-		self.looper_widget = LooperWidget(self, loops)
+		self.looper_widget = LooperWidget(self, loopsdb, Looper())
 		self.setCentralWidget(self.looper_widget)
 		self.looper_widget.layout().setContentsMargins(8,8,8,8)
 		self.quit_shortcut = QShortcut(QKeySequence('Ctrl+Q'), self)
