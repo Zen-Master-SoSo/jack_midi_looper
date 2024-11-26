@@ -66,7 +66,10 @@ class LooperWidget(QFrame):
 			rows = len(new_loops) // self.columns + 1
 			ord_ = 0
 			for loop in new_loops:
-				button = QPushButton('{} ({} measures)'.format(loop.name, loop.measures), self.frm_loops)
+				button = LoopButton('{} ({}/4 - {} beats)'.format(
+						loop.name, loop.beats_per_measure,
+						loop.beats_per_measure * loop.measures),
+					self.frm_loops)
 				button.setFont(self.loops_font)
 				button.setCheckable(True)
 				button.loop_id = loop.loop_id
@@ -101,5 +104,10 @@ class LooperWidget(QFrame):
 	def sizeHint(self):
 		return QSize(490, 50)
 
+
+class LoopButton(QPushButton):
+	"""
+	Inherited to facilitate styling with CSS
+	"""
 
 #  end jack_midi_looper/looper_widget.py
