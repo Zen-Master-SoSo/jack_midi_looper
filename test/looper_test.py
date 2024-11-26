@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QShortcut
 from PyQt5.QtGui import QKeySequence
 from qt_extras import DevilBox
 from jack import JackError
-from jack_midi_looper import Loops
+from jack_midi_looper import LoopsDB
 from jack_midi_looper.looper_widget import LooperWidget
 
 
@@ -46,7 +46,7 @@ if __name__ == "__main__":
 			os.mkdir(dbpath)
 		except FileExistsError:
 			pass
-		main_window = LooperTestWindow(Loops(dbpath))
+		main_window = LooperTestWindow(LoopsDB(dbpath))
 	except JackError:
 		DevilBox('Could not connect to JACK server. Is it running?')
 		sys.exit(1)

@@ -12,9 +12,9 @@ from PyQt5.QtWidgets import QFrame
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtWidgets import QGridLayout
 
-from qt_extras import ShutUpQT
+from qt_extras import ShutUpQT, SigBlock
 
-from jack_midi_looper import Loops, Looper
+from jack_midi_looper import Looper
 
 
 class LooperWidget(QFrame):
@@ -22,14 +22,14 @@ class LooperWidget(QFrame):
 	single_loop	= False # Set True to play one loop at a time
 	columns = 6
 
-	def __init__(self, parent, loops):
+	def __init__(self, parent, loops_db):
 		super().__init__(parent)
-		self.loops = loops
+		self.loops_db = loops_db
 		my_dir = os.path.dirname(__file__)
 		with ShutUpQT():
 			uic.loadUi(os.path.join(my_dir, 'res', 'looper_widget.ui'), self)
 		self.cmb_group.addItem('')
-		self.cmb_group.addItems(self.loops.groups())
+		self.cmb_group.addItems(self.loops_db.groups())
 		self.cmb_group.currentTextChanged.connect(self.group_changed)
 		self.beat_spinner.valueChanged.connect(self.set_bpm)
 		self.play_button.toggled.connect(self.play_toggle)
@@ -59,9 +59,8 @@ class LooperWidget(QFrame):
 			button.deleteLater()
 		if text == '':
 			return
-		new_loops = [self.loops.loop(tup[0]) for tup in self.loops.group_loops(text)]
-		if new_loops:
-			new_loops.sort(key=lambda loop: loop.name)
+		new_loops = self.loops_db.group_loops(text)
+		if len(new_loops):
 			self.looper.extend_loops(new_loops)
 			rows = len(new_loops) // self.columns + 1
 			ord_ = 0
@@ -79,13 +78,11 @@ class LooperWidget(QFrame):
 
 	@pyqtSlot(int, bool)
 	def loop_select(self, loop_id, state):
-		if state and self.single_loop:
-			for button in self.frm_loops.findChildren(QPushButton):
-				if button.loop_id != loop_id:
-					button.setChecked(False)
-		self.looper.loop(loop_id).play = state
-		if state:
-			self.looper.remeasure()
+		self.looper.enable_loop(loop_id, state, self.single_loop)
+		buttons = self.frm_loops.findChildren(QPushButton)
+		with SigBlock(*buttons):
+			for button in buttons:
+				button.setChecked(self.looper.loop(button.loop_id).active)
 		self.play_button.setEnabled(self.looper.any_loop_active())
 
 	@pyqtSlot(bool)

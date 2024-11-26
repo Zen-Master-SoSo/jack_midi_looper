@@ -26,7 +26,7 @@ class Loop:
 		evfile = io.BytesIO(midi_events)
 		self.events = np.load(evfile)
 		self._beat_offset = 0
-		self.play = False
+		self.active = False
 
 	@property
 	def event_count(self):
@@ -73,7 +73,7 @@ class Loop:
 			print("{:.3f}  0x{:x} {} {}".format(self.events[i][0], *self.events[i][1]))
 
 
-class Loops:
+class LoopsDB:
 	"""
 	Interface to sqlite database in which loops are saved.
 	"""
@@ -216,13 +216,12 @@ class Loops:
 
 	def group_loops(self, loop_group):
 		"""
-		Returns list of tuples, each containing (loop_id, name), for
-		those loops belonging to the given group.
+		Returns list of Loop objects belonging to the given group.
 		loop_group: (string) group name
 		"""
 		cursor = self._connection.cursor()
-		cursor.execute('SELECT loop_id, name FROM loops WHERE loop_group = ?', (loop_group,))
-		return cursor.fetchall()
+		cursor.execute('SELECT * FROM loops WHERE loop_group = ? ORDER BY name', (loop_group,))
+		return [ Loop(row) for row in cursor.fetchall() ]
 
 	def loop_ids(self):
 		"""
@@ -239,7 +238,6 @@ class Loops:
 			cursor.execute('SELECT loop_id, name FROM loops')
 			self._loop_names = { row[0]:row[1] for row in cursor.fetchall() }
 		return self._loop_names
-
 
 	def loop(self, loop_id):
 		"""
@@ -267,7 +265,7 @@ class Looper:
 		self.beats_per_measure = None
 		self.beat = 0.0
 		self.loop_len_beats = 0.0
-		self.loops = []
+		self.loops = {} 	# dict indexed on loop_id
 		self.state = Looper.INACTIVE
 		self.__real_process_callback = self._null_process_callback
 		self.client_name = client_name
@@ -311,8 +309,8 @@ class Looper:
 			raise Exception("beats_per_measure mismatch")
 		with Pause(self):
 			self.beats_per_measure = loop.beats_per_measure
-			self.loops.append(loop)
-			self.remeasure()
+			self.loops[loop.loop_id] = loop
+			self._remeasure()
 		return loop
 
 	def extend_loops(self, loop_list):
@@ -327,45 +325,55 @@ class Looper:
 			if loop.beats_per_measure != self.beats_per_measure:
 				raise Exception("beats_per_measure mismatch")
 		with Pause(self):
-			self.loops.extend(loop_list)
-			self.remeasure()
+			self.loops.update({ loop.loop_id:loop for loop in loop_list })
+			self._remeasure()
 
-	def remeasure(self):
+	def enable_loop(self, loop_id, state, exclusive):
+		"""
+		Sets the "active" property on the loop identified by loop_id to match the
+		"state" condition (True/False).
+		If "exclusive" is True, and "state" is True, resets the "active" property on
+		all other loaded loops so that only one loop is active at a time.
+		"""
+		if state and exclusive:
+			for loop in self.loops.values():
+				loop.active = loop.loop_id == loop_id
+		else:
+			self.loops[loop_id].active = state
+		with Pause(self):
+			self._remeasure()
+
+	def _remeasure(self):
 		"""
 		Determines how many beats to loop based on the beats-per-measure and total
 		number of beats in all active loops. Called from "append_loop" and
 		"extend_loops" functions.
 		"""
-		if self.loops:
-			try:
-				last_beat = max([loop.last_beat for loop in self.loops if loop.play])
-			except ValueError:
-				self.loop_len_beats = 0.0
-			else:
-				self.loop_len_beats = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
+		logging.debug('REMEASURE')
+		if self.any_loop_active():
+			last_beat = max([loop.last_beat for loop in self.loops.values() if loop.active])
+			self.loop_len_beats = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
 		else:
+			logging.debug('NO LOOPS ACTIVE')
 			self.loop_len_beats = 0.0
 		if self.beat > self.loop_len_beats:
 			self.beat = 0.0
 
 	def loop(self, loop_id):
-		for loop in self.loops:
-			if loop.loop_id == loop_id:
-				return loop
-		return None
+		return self.loops[loop_id]
 
 	def loaded_loop_ids(self):
 		"""
 		Returns the loop_id of every loaded loop.
 		"""
-		return [loop.loop_id for loop in self.loops]
+		return list(self.loops.keys())
 
 	def any_loop_active(self):
 		"""
-		Returns boolean True if any loaded loop's "play" attribute is True.
+		Returns boolean True if any loaded loop's "active" attribute is True.
 		"""
-		for loop in self.loops:
-			if loop.play:
+		for loop in self.loops.values():
+			if loop.active:
 				return True
 		return False
 
@@ -374,7 +382,7 @@ class Looper:
 		Removes all loops from the current loaded loops.
 		"""
 		self.stop()
-		self.loops = []
+		self.loops = {}
 		self.beats_per_measure = None
 
 	def _rescale(self):
@@ -385,16 +393,18 @@ class Looper:
 
 	def stop(self):
 		"""
-		Sends "All Notes Off" on every channel and stops playing.
+		Transitions to "_stop_process_callback", which sends "Note Off"
+		to all channels.
 		"""
 		if self.state == Looper.INACTIVE:
 			return
 		logging.debug('STOP')
 		self.__real_process_callback = self._stop_process_callback
+		self.state = Looper.INACTIVE
 
 	def play(self):
 		"""
-		Start playing any active loops (loops whose "play" attribute is True).
+		Start playing any active loops (loops whose "active" attribute is True).
 		"""
 		if self.state == Looper.PLAYING:
 			return
@@ -411,7 +421,7 @@ class Looper:
 			last_beat = self.beat + self.beats_per_process
 			while True:
 				events_this_block = np.hstack([loop.events_between(self.beat, last_beat) \
-					for loop in self.loops if loop.play])
+					for loop in self.loops.values() if loop.active])
 				if len(events_this_block):
 					for evt in np.sort(events_this_block, kind="heapsort", order="beat"):
 						offset = int((evt['beat'] - self.beat) * self.samples_per_beat)
@@ -434,7 +444,6 @@ class Looper:
 			msg[0] += 1
 		self.beat = 0.0
 		self.__real_process_callback = self._null_process_callback
-		self.state = Looper.INACTIVE
 
 	# -----------------------
 	# JACK callbacks
@@ -530,9 +539,9 @@ class Pause:
 
 	def __init__(self, looper):
 		self.looper = looper
-		self.previous_state = looper.state
 
 	def __enter__(self):
+		self.previous_state = self.looper.state
 		self.looper.stop()
 
 	def __exit__(self, *_):
@@ -542,10 +551,10 @@ class Pause:
 
 
 if __name__ == "__main__":
-	loops = Loops(os.path.join(user_config_dir(), 'ZenSoSo', 'midibanks.db'))
-	print(len(loops.groups()), 'groups')
-	print(len(loops.loop_ids()), 'loops')
+	loopsdb = LoopsDB(os.path.join(user_config_dir(), 'ZenSoSo', 'midibanks.db'))
+	print(len(loopsdb.groups()), 'groups')
+	print(len(loopsdb.loop_ids()), 'loopsdb')
 	print('Random loop:')
-	print(loops.random_loop())
+	print(loopsdb.random_loop())
 
 #  end jack_midi_looper/__init__.py
