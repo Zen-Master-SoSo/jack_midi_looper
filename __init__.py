@@ -372,10 +372,7 @@ class Looper:
 		"""
 		Returns boolean True if any loaded loop's "active" attribute is True.
 		"""
-		for loop in self.loops.values():
-			if loop.active:
-				return True
-		return False
+		return any(loop.active for loop in self.loops.values())
 
 	def clear(self):
 		"""
