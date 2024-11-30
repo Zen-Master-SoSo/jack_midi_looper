@@ -1,4 +1,4 @@
-#  jack_midi_looper/fake_out_test.py
+#  jack_midi_looper/test/fake_out_test.py
 #
 #  Copyright 2024 liyang <liyang@veronica>
 #
@@ -20,3 +20,5 @@ looper.append_loop(loop)
 for i in range(250):
 	print('beat %.2f' % looper.beat)
 	looper._play_process_callback(FakeClient.blocksize)
+
+#  end jack_midi_looper/test/fake_out_test.py
