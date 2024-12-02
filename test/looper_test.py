@@ -31,7 +31,7 @@ class LooperTestWindow(QMainWindow):
 		event.accept()
 
 	def system_signal(self, sig, frame):
-		logging.debug("Caught signal - shutting down")
+		logging.debug('Caught signal - shutting down')
 		self.close()
 
 

@@ -9,7 +9,7 @@ import numpy as np
 from appdirs import user_config_dir
 from mido import MidiFile
 from jack import Client, CallbackExit
-
+from good_logging import log_error
 
 EVENT_STRUCT = np.dtype([ ('beat', float), ('msg', np.uint8, 3) ])
 DEFAULT_BEATS_PER_MEASURE = 4
@@ -464,14 +464,7 @@ class Looper:
 		try:
 			self._real_process_callback(frames)
 		except Exception as e:
-			tb = e.__traceback__
-			logging.error('{} {}(), line {}: {} "{}"'.format(
-				os.path.basename(tb.tb_frame.f_code.co_filename),
-				tb.tb_frame.f_code.co_name,
-				tb.tb_lineno,
-				type(e).__name__,
-				str(e),
-			))
+			log_error(e)
 			raise CallbackExit
 
 	def _shutdown_callback(self, status, reason):
@@ -487,7 +480,7 @@ class Looper:
 		The callback argument is the delay in microseconds due to the most recent XRUN
 		occurrence. The callback is supposed to raise CallbackExit on error.
 		"""
-		logging.debug(f'xrun: delayed {delayed_usecs:.2f} microseconds')
+		logging.debug('xrun: delayed %.2f microseconds', delayed_usecs)
 		pass
 
 
