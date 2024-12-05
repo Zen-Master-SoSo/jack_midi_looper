@@ -48,7 +48,6 @@ class LooperWidget(QFrame):
 
 	@pyqtSlot(str)
 	def group_changed(self, text):
-		self.looper.stop()
 		self.looper.clear()
 		self.play_button.setChecked(False)
 		self.play_button.setEnabled(False)
@@ -81,6 +80,8 @@ class LooperWidget(QFrame):
 		with SigBlock(*buttons):
 			for button in buttons:
 				button.setChecked(self.looper.loop(button.loop_id).active)
+		if self.play_button.isChecked():
+			self.play_button.setChecked(self.looper.any_loop_active())
 		self.play_button.setEnabled(self.looper.any_loop_active())
 
 	@pyqtSlot(bool)

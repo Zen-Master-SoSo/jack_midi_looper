@@ -256,17 +256,12 @@ class LoopsDB:
 
 class Looper:
 
-	# state constants:
-	INACTIVE	= 0
-	PLAYING		= 1
-
 	def __init__(self, client_name='looper', test=False):
 		self._bpm = DEFAULT_BEATS_PER_MINUTE
 		self.beats_per_measure = None
 		self.beat = 0.0
 		self.beats_length = 0.0
 		self.loops = {} 	# dict indexed on loop_id
-		self.state = Looper.INACTIVE
 		self._real_process_callback = self._null_process_callback
 		self.client_name = client_name
 		if test:
@@ -388,26 +383,26 @@ class Looper:
 		seconds_per_process = self.client.blocksize / self.client.samplerate
 		self.beats_per_process = beats_per_second * seconds_per_process
 
+	def is_playing(self):
+		return self._real_process_callback is self._play_process_callback
+
 	def stop(self):
 		"""
 		Transitions to "_stop_process_callback", which sends "Note Off"
 		to all channels.
 		"""
-		if self.state == Looper.INACTIVE:
-			return
-		logging.debug('STOP')
-		self._real_process_callback = self._stop_process_callback
-		self.state = Looper.INACTIVE
+		if self.is_playing():
+			logging.debug('STOP')
+			self._real_process_callback = self._stop_process_callback
 
 	def play(self):
 		"""
 		Start playing any active loops (loops whose "active" attribute is True).
 		"""
-		if self.state == Looper.PLAYING:
+		if self.is_playing():
 			return
 		logging.debug('PLAY')
 		self._real_process_callback = self._play_process_callback
-		self.state = Looper.PLAYING
 
 	def _null_process_callback(self, frames):
 		pass
@@ -439,7 +434,6 @@ class Looper:
 		for channel in range(16):
 			self.out_port.write_midi_event(0, msg)
 			msg[0] += 1
-		self.beat = 0.0
 		self._real_process_callback = self._null_process_callback
 
 	# -----------------------
@@ -472,7 +466,7 @@ class Looper:
 		The argument status is of type jack.Status.
 		"""
 		logging.debug('JACK Shutdown')
-		if self.state != Looper.INACTIVE:
+		if self.is_playing():
 			raise JackShutdownError
 
 	def _xrun_callback(self, delayed_usecs):
@@ -531,11 +525,11 @@ class Pause:
 		self.looper = looper
 
 	def __enter__(self):
-		self.previous_state = self.looper.state
+		self.previous_state = self.looper.is_playing()
 		self.looper.stop()
 
 	def __exit__(self, *_):
-		if self.previous_state == Looper.PLAYING:
+		if self.previous_state:
 			self.looper.play()
 
 
