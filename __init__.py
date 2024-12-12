@@ -344,12 +344,10 @@ class Looper:
 		number of beats in all active loops. Called from "append_loop" and
 		"extend_loops" functions.
 		"""
-		logging.debug('REMEASURE')
 		if self.any_loop_active():
 			last_beat = max([loop.last_beat for loop in self.loops.values() if loop.active])
 			self.beats_length = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
 		else:
-			logging.debug('NO LOOPS ACTIVE')
 			self.beats_length = 0.0
 		if self.beat > self.beats_length:
 			self.beat = 0.0
