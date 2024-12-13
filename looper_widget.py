@@ -17,7 +17,6 @@ from qt_extras import ShutUpQT, SigBlock
 
 class LooperWidget(QFrame):
 
-	single_loop	= False # Set True to play one loop at a time
 	columns = 6
 
 	def __init__(self, parent, loops_db, looper):
@@ -75,7 +74,7 @@ class LooperWidget(QFrame):
 
 	@pyqtSlot(int, bool)
 	def loop_select(self, loop_id, state):
-		self.looper.enable_loop(loop_id, state, self.single_loop)
+		self.looper.enable_loop(loop_id, state)
 		buttons = self.frm_loops.findChildren(QPushButton)
 		with SigBlock(*buttons):
 			for button in buttons:

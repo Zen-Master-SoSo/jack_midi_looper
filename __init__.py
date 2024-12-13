@@ -3,9 +3,10 @@
 #  Copyright 2024 liyang <liyang@veronica>
 #
 import os, sqlite3, glob, re, io, logging
+import numpy as np
+from threading import Event, Lock
 from math import ceil
 from random import choice
-import numpy as np
 from appdirs import user_config_dir
 from mido import MidiFile
 from jack import Client, CallbackExit
@@ -137,6 +138,7 @@ class LoopsDB:
 		Recursively searches for midi files in the given directory and adds each of
 		them to the database as a new Loop.
 		"""
+		from progress.bar import IncrementalBar
 		cursor = self._connection.cursor()
 		loop_sql = """
 			INSERT INTO loops(loop_group, name, beats_per_measure, measures, midi_events)
@@ -146,19 +148,21 @@ class LoopsDB:
 			INSERT INTO pitches VALUES (?,?)
 			"""
 		files = glob.glob(os.path.join(base_dir, '**' , '*.mid'), recursive=True)
-		for filename in files:
-			loop_group = re.sub(r'(_|[^\w])+', ' ', os.path.dirname(filename).replace(base_dir, ''))
-			name = os.path.splitext(os.path.basename(filename))[0]
-			try:
-				beats_per_measure, measures, pitches, events = self.read_midi_file(filename)
-				evfile = io.BytesIO()
-				np.save(evfile, events)
-				evfile.seek(0)
-				cursor.execute(loop_sql, (loop_group, name, beats_per_measure, measures, evfile.read()))
-				cursor.executemany(pitch_sql, [ (cursor.lastrowid, pitch) for pitch in pitches ])
-				self._connection.commit()
-			except Exception as e:
-				print('Failed to import {}. ERROR {} "{}".'.format(name, type(e).__name__, e))
+		with IncrementalBar('Importing loops', max=len(files)) as progress_bar:
+			for filename in files:
+				loop_group = re.sub(r'(_|[^\w])+', ' ', os.path.dirname(filename).replace(base_dir, '')).strip()
+				name = os.path.splitext(os.path.basename(filename))[0]
+				try:
+					beats_per_measure, measures, pitches, events = self.read_midi_file(filename)
+					evfile = io.BytesIO()
+					np.save(evfile, events)
+					evfile.seek(0)
+					cursor.execute(loop_sql, (loop_group, name, beats_per_measure, measures, evfile.read()))
+					cursor.executemany(pitch_sql, [ (cursor.lastrowid, pitch) for pitch in pitches ])
+					self._connection.commit()
+				except Exception as e:
+					print('Failed to import {}. ERROR {} "{}".'.format(name, type(e).__name__, e))
+				progress_bar.next()
 
 	@classmethod
 	def read_midi_file(cls, midi_filename):
@@ -256,14 +260,24 @@ class LoopsDB:
 
 class Looper:
 
-	def __init__(self, client_name='looper', test=False):
+	def __init__(self, client_name = 'looper', test = False):
+		self.client_name = client_name
 		self._bpm = DEFAULT_BEATS_PER_MINUTE
 		self.beats_per_measure = None
 		self.beat = 0.0
 		self.beats_length = 0.0
 		self.loops = {} 	# dict indexed on loop_id
+		self.loop_exclusive = True
+		self.is_playing = False
+		self.stop_event = Event()
+		self.loop_manipulation_lock = Lock()
 		self._real_process_callback = self._null_process_callback
-		self.client_name = client_name
+		self.create_client()
+
+	def create_client(self):
+		"""
+		Setup client and ports. Extend for custom classes.
+		"""
 		if test:
 			self.client = FakeClient()
 			self.out_port = FakePort()
@@ -301,8 +315,8 @@ class Looper:
 		"""
 		if self.beats_per_measure is not None and \
 			loop.beats_per_measure != self.beats_per_measure:
-			raise Exception("beats_per_measure mismatch")
-		with Pause(self):
+			raise RuntimeError("beats_per_measure mismatch")
+		with self.loop_manipulation_lock:
 			self.beats_per_measure = loop.beats_per_measure
 			self.loops[loop.loop_id] = loop
 			self._remeasure()
@@ -314,28 +328,30 @@ class Looper:
 		Throws up if any loop's beats per measure does not
 		match all the loaded loop's beats per measure.
 		"""
-		if self.beats_per_measure is None:
-			self.beats_per_measure = loop_list[0].beats_per_measure
+		beats_per_measure = loop_list[0].beats_per_measure \
+			if self.beats_per_measure is None \
+			else self.beats_per_measure
 		for loop in loop_list:
-			if loop.beats_per_measure != self.beats_per_measure:
-				raise Exception("beats_per_measure mismatch")
-		with Pause(self):
+			if loop.beats_per_measure != beats_per_measure:
+				raise RuntimeError("beats_per_measure mismatch")
+		with self.loop_manipulation_lock:
+			self.beats_per_measure = beats_per_measure
 			self.loops.update({ loop.loop_id:loop for loop in loop_list })
 			self._remeasure()
 
-	def enable_loop(self, loop_id, state, exclusive):
+	def enable_loop(self, loop_id, state):
 		"""
 		Sets the "active" property on the loop identified by loop_id to match the
 		"state" condition (True/False).
-		If "exclusive" is True, and "state" is True, resets the "active" property on
-		all other loaded loops so that only one loop is active at a time.
+		If "self.loop_exclusive" is True, and "state" is True, resets the "active"
+		property on all other loaded loops so that only one loop is active at a time.
 		"""
-		if state and exclusive:
+		if state and self.loop_exclusive:
 			for loop in self.loops.values():
 				loop.active = loop.loop_id == loop_id
 		else:
 			self.loops[loop_id].active = state
-		with Pause(self):
+		with self.loop_manipulation_lock:
 			self._remeasure()
 
 	def _remeasure(self):
@@ -389,25 +405,28 @@ class Looper:
 		Transitions to "_stop_process_callback", which sends "Note Off"
 		to all channels.
 		"""
-		if self.is_playing():
+		if self.is_playing:
 			logging.debug('STOP')
+			self.is_playing = False
+			self.stop_event.clear()
 			self._real_process_callback = self._stop_process_callback
+			self.stop_event.wait()
 
 	def play(self):
 		"""
 		Start playing any active loops (loops whose "active" attribute is True).
 		"""
-		if self.is_playing():
-			return
-		logging.debug('PLAY')
-		self._real_process_callback = self._play_process_callback
+		if not self.is_playing:
+			logging.debug('PLAY')
+			self.is_playing = True
+			self._real_process_callback = self._play_process_callback
 
 	def _null_process_callback(self, frames):
 		pass
 
 	def _play_process_callback(self, frames):
-		if self.any_loop_active():
-			self.out_port.clear_buffer()
+		self.out_port.clear_buffer()
+		if self.any_loop_active() and not self.loop_manipulation_lock.locked():
 			last_beat = self.beat + self.beats_per_process
 			while True:
 				events_this_block = np.hstack([loop.events_between(self.beat, last_beat) \
@@ -433,6 +452,7 @@ class Looper:
 			self.out_port.write_midi_event(0, msg)
 			msg[0] += 1
 		self._real_process_callback = self._null_process_callback
+		self.stop_event.set()
 
 	# -----------------------
 	# JACK callbacks
@@ -464,7 +484,7 @@ class Looper:
 		The argument status is of type jack.Status.
 		"""
 		logging.debug('JACK Shutdown')
-		if self.is_playing():
+		if self.is_playing:
 			raise JackShutdownError
 
 	def _xrun_callback(self, delayed_usecs):
@@ -510,26 +530,6 @@ class FakePort:
 		"""
 		print('MIDI EVENT: {:7d}  0x{:x}  {:d}  {:d}'.format(offset, tup[0], tup[1], tup[2]))
 		self.rc += 1
-
-
-class Pause:
-	"""
-	A context manager that remembers what state a Looper is in,
-	stops it, lets you do work, and then restarts it if it had
-	been running.
-	"""
-
-	def __init__(self, looper):
-		self.looper = looper
-
-	def __enter__(self):
-		self.previous_state = self.looper.is_playing()
-		self.looper.stop()
-
-	def __exit__(self, *_):
-		if self.previous_state:
-			self.looper.play()
-
 
 
 if __name__ == "__main__":
