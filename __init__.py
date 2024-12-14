@@ -361,7 +361,7 @@ class Looper:
 		"extend_loops" functions.
 		"""
 		if self.any_loop_active():
-			last_beat = max([loop.last_beat for loop in self.loops.values() if loop.active])
+			last_beat = max( loop.last_beat for loop in self.loops.values() if loop.active )
 			self.beats_length = float(ceil(last_beat / self.beats_per_measure) * self.beats_per_measure)
 		else:
 			self.beats_length = 0.0
