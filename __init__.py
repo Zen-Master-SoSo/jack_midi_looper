@@ -84,8 +84,13 @@ class LoopsDB:
 	_groups = None
 
 	def __init__(self, dbfile):
-		self.dbfile = dbfile
-		self._connection = sqlite3.connect(self.dbfile)
+		if not os.path.isfile(dbfile):
+			db_dir = os.path.dirname(dbfile)
+			try:
+				os.mkdir(db_dir)
+			except FileExistsError:
+				pass
+		self._connection = sqlite3.connect(dbfile)
 		self._connection.execute('PRAGMA foreign_keys = ON')
 		cursor = self._connection.execute('SELECT name FROM sqlite_master WHERE type="table"')
 		rows = cursor.fetchall()
@@ -260,7 +265,7 @@ class LoopsDB:
 
 class Looper:
 
-	def __init__(self, client_name = 'looper', test = False):
+	def __init__(self, client_name = 'looper'):
 		self.client_name = client_name
 		self._bpm = DEFAULT_BEATS_PER_MINUTE
 		self.beats_per_measure = None
@@ -273,25 +278,21 @@ class Looper:
 		self.loop_manipulation_lock = Lock()
 		self._real_process_callback = self._null_process_callback
 		self.create_client()
+		self._rescale()
 
 	def create_client(self):
 		"""
 		Setup client and ports. Extend for custom classes.
 		"""
-		if test:
-			self.client = FakeClient()
-			self.out_port = FakePort()
-			self._rescale()
-		else:
-			self.client = Client(self.client_name, no_start_server=True)
-			self.client.set_blocksize_callback(self._blocksize_callback)
-			self.client.set_samplerate_callback(self._samplerate_callback)
-			self.client.set_process_callback(self._process_callback)
-			self.client.set_shutdown_callback(self._shutdown_callback)
-			self.client.set_xrun_callback(self._xrun_callback)
-			self.client.activate()
-			self.client.get_ports()
-			self.out_port = self.client.midi_outports.register('out')
+		self.client = Client(self.client_name, no_start_server=True)
+		self.client.set_blocksize_callback(self._blocksize_callback)
+		self.client.set_samplerate_callback(self._samplerate_callback)
+		self.client.set_process_callback(self._process_callback)
+		self.client.set_shutdown_callback(self._shutdown_callback)
+		self.client.set_xrun_callback(self._xrun_callback)
+		self.client.activate()
+		self.client.get_ports()
+		self.out_port = self.client.midi_outports.register('out')
 
 	@property
 	def bpm(self):
@@ -448,7 +449,7 @@ class Looper:
 		"""
 		self.out_port.clear_buffer()
 		msg = bytearray.fromhex('B07B')
-		for channel in range(16):
+		for channel in range(128):
 			self.out_port.write_midi_event(0, msg)
 			msg[0] += 1
 		self._real_process_callback = self._null_process_callback
@@ -496,47 +497,10 @@ class Looper:
 		pass
 
 
-class JackShutdownError(Exception):
+class JackShutdownError(RuntimeError):
 	"""
 	Used to notify calling process that the Jack server has shutdown.
 	"""
 
-
-class FakeClient:
-	"""
-	A Drop-in replacement for Jack-Client's Client class,
-	used strictly for testing.
-	"""
-	samplerate = 100
-	blocksize = 33
-
-
-class FakePort:
-	"""
-	A Drop-in replacement for Jack-Client's OwnMIDIPort class,
-	used strictly for testing.
-	"""
-	rc = 0
-
-	def clear_buffer(self):
-		"""
-		Fake -out clear_buffer before writing MIDI data.
-		"""
-		pass
-
-	def write_midi_event(self, offset, tup):
-		"""
-		Pretends to write to a midi port, but just prints data to the console.
-		"""
-		print('MIDI EVENT: {:7d}  0x{:x}  {:d}  {:d}'.format(offset, tup[0], tup[1], tup[2]))
-		self.rc += 1
-
-
-if __name__ == "__main__":
-	loopsdb = LoopsDB(os.path.join(user_config_dir(), 'ZenSoSo', 'midibanks.db'))
-	print(len(loopsdb.groups()), 'groups')
-	print(len(loopsdb.loop_ids()), 'loopsdb')
-	print('Random loop:')
-	print(loopsdb.random_loop())
 
 #  end jack_midi_looper/__init__.py
