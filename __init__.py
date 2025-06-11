@@ -449,7 +449,7 @@ class Looper:
 		"""
 		self.out_port.clear_buffer()
 		msg = bytearray.fromhex('B07B')
-		for channel in range(128):
+		for channel in range(16):
 			self.out_port.write_midi_event(0, msg)
 			msg[0] += 1
 		self._real_process_callback = self._null_process_callback
