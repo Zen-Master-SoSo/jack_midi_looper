@@ -407,7 +407,6 @@ class Looper:
 		to all channels.
 		"""
 		if self.is_playing:
-			logging.debug('STOP')
 			self.is_playing = False
 			self.stop_event.clear()
 			self._real_process_callback = self._stop_process_callback
@@ -418,7 +417,6 @@ class Looper:
 		Start playing any active loops (loops whose "active" attribute is True).
 		"""
 		if not self.is_playing:
-			logging.debug('PLAY')
 			self.is_playing = True
 			self._real_process_callback = self._play_process_callback
 
@@ -478,6 +476,7 @@ class Looper:
 			self._real_process_callback(frames)
 		except Exception as e:
 			log_error(e)
+			self.stop_event.set()
 			raise CallbackExit
 
 	def _shutdown_callback(self, status, reason):

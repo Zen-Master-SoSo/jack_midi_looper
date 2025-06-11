@@ -54,16 +54,23 @@ class LooperWidget(QFrame):
 		self.beat_spinner.valueChanged.connect(self.slot_bpm_changed)
 		self.rb_layered.clicked.connect(self.slot_layered_clicked)
 		self.rb_single.clicked.connect(self.slot_single_clicked)
-		self.play_button.toggled.connect(self.slot_play_toggle)
 		self.loops_layout = QGridLayout()
 		self.loops_layout.setContentsMargins(0,0,0,0)
 		self.loops_layout.setSpacing(2)
 		self.frm_loops.setLayout(self.loops_layout)
-		self.loops_font = self.play_button.font()
+		self.loops_font = self.lbl1.font()
 		self.loops_font.setPointSize(8)
 		self.update_timer = QTimer()
 		self.update_timer.setInterval(int(1 / 8 * 1000))
 		self.update_timer.timeout.connect(self.slot_timer_timeout)
+
+	def toggle_play(self, state):
+		if state:
+			self.update_timer.start()
+			self.looper.play()
+		else:
+			self.update_timer.stop()
+			self.looper.stop()
 
 	@pyqtSlot()
 	def slot_timer_timeout(self):
@@ -72,8 +79,7 @@ class LooperWidget(QFrame):
 	@pyqtSlot(str)
 	def slot_group_changed(self, text):
 		self.looper.clear()
-		self.play_button.setChecked(False)
-		self.play_button.setEnabled(False)
+		self.toggle_play(False)
 		for button in self.frm_loops.findChildren(QPushButton):
 			self.loops_layout.removeWidget(button)
 			button.deleteLater()
@@ -103,18 +109,7 @@ class LooperWidget(QFrame):
 		with SigBlock(*buttons):
 			for button in buttons:
 				button.setChecked(self.looper.loop(button.loop_id).active)
-		if self.play_button.isChecked():
-			self.play_button.setChecked(self.looper.any_loop_active())
-		self.play_button.setEnabled(self.looper.any_loop_active())
-
-	@pyqtSlot(bool)
-	def slot_play_toggle(self, state):
-		if state:
-			self.update_timer.start()
-			self.looper.play()
-		else:
-			self.update_timer.stop()
-			self.looper.stop()
+		self.toggle_play(self.looper.any_loop_active())
 
 	@pyqtSlot(bool)
 	def slot_layered_clicked(self, state):
