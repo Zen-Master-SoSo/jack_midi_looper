@@ -8,7 +8,7 @@ from functools import partial
 from jack import JackError
 from PyQt5.QtWidgets import QApplication, QMainWindow, QShortcut, QFrame, QPushButton, QGridLayout
 from PyQt5.QtCore import pyqtSlot, QTimer, QSize
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QKeySequence, QIcon
 from PyQt5 import uic
 from qt_extras import ShutUpQT, SigBlock, DevilBox
 from jack_midi_looper import Looper, LoopsDB
@@ -22,6 +22,7 @@ class MainWindow(QMainWindow):
 			dbfile = os.path.join(user_config_dir(), 'ZenSoSo', 'looper-loops.db')
 		self.loops_db = LoopsDB(dbfile)
 		self.setWindowTitle(f'Looper ({dbfile})')
+		self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), 'res', 'musecbox-icon.png')))
 		self.looper_widget = LooperWidget(self, self.loops_db, Looper())
 		self.setCentralWidget(self.looper_widget)
 		self.looper_widget.layout().setContentsMargins(4,4,4,4)
