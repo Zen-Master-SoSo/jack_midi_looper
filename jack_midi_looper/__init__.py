@@ -31,7 +31,7 @@ from jack import Client, CallbackExit
 from log_soso import log_error
 from progress.bar import IncrementalBar
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 EVENT_STRUCT = np.dtype([ ('beat', float), ('msg', np.uint8, 3) ])
 DEFAULT_BEATS_PER_MEASURE = 4
