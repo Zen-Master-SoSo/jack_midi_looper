@@ -2,9 +2,27 @@
 #
 #  Copyright 2024 liyang <liyang@veronica>
 #
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#
+"""
+A Qt5 -based GUI.
+"""
 import os, sys, argparse, logging
-from appdirs import user_config_dir
 from functools import partial
+from appdirs import user_config_dir
 from jack import JackError
 from PyQt5.QtWidgets import QApplication, QMainWindow, QShortcut, QFrame, QPushButton, QGridLayout
 from PyQt5.QtCore import pyqtSlot, QTimer, QSize
@@ -33,12 +51,15 @@ class MainWindow(QMainWindow):
 		self.looper_widget.looper.stop()
 		event.accept()
 
-	def system_signal(self, sig, frame):
+	def system_signal(self, *_):
 		logging.debug('Caught signal - shutting down')
 		self.close()
 
 
 class LooperWidget(QFrame):
+	"""
+	A widget inheriting QFrame which can be embedded in your GUI application.
+	"""
 
 	columns = 6
 
@@ -113,11 +134,11 @@ class LooperWidget(QFrame):
 		self.toggle_play(self.looper.any_loop_active())
 
 	@pyqtSlot(bool)
-	def slot_layered_clicked(self, state):
+	def slot_layered_clicked(self, _):
 		self.looper.loop_exclusive = True
 
 	@pyqtSlot(bool)
-	def slot_single_clicked(self, state):
+	def slot_single_clicked(self, _):
 		for button in self.frm_loops.findChildren(QPushButton):
 			button.setChecked(False)
 		self.looper.loop_exclusive = False

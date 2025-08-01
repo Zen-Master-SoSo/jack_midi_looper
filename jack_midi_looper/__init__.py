@@ -2,15 +2,36 @@
 #
 #  Copyright 2024 liyang <liyang@veronica>
 #
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation; either version 2 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#
+"""
+A jack client which generates MIDI events by beat, not time, using "loops" imported from midi files.
+"""
 import os, sqlite3, glob, re, io, logging
-import numpy as np
 from threading import Event, Lock
 from math import ceil
 from random import choice
+import numpy as np
 from appdirs import user_config_dir
 from mido import MidiFile
 from jack import Client, CallbackExit
-from good_logging import log_error
+from log_soso import log_error
+from progress.bar import IncrementalBar
+
+__version__ = "1.0.0"
 
 EVENT_STRUCT = np.dtype([ ('beat', float), ('msg', np.uint8, 3) ])
 DEFAULT_BEATS_PER_MEASURE = 4
@@ -69,9 +90,9 @@ class Loop:
 		"""
 		Nicely formatted event printing
 		"""
-		for i in range(len(self.events)):
+		for i, event in enumerate(self.events):
 			print("{:3d}: ".format(i), end = "")
-			print("{:.3f}  0x{:x} {} {}".format(self.events[i][0], *self.events[i][1]))
+			print("{:.3f}  0x{:x} {} {}".format(event[0], *event[1]))
 
 
 class LoopsDB:
@@ -143,7 +164,6 @@ class LoopsDB:
 		Recursively searches for midi files in the given directory and adds each of
 		them to the database as a new Loop.
 		"""
-		from progress.bar import IncrementalBar
 		cursor = self._connection.cursor()
 		loop_sql = """
 			INSERT INTO loops(loop_group, name, beats_per_measure, measures, midi_events)
@@ -168,6 +188,8 @@ class LoopsDB:
 				except Exception as e:
 					print('Failed to import {}. ERROR {} "{}".'.format(name, type(e).__name__, e))
 				progress_bar.next()
+		self._loop_names = None
+		self._groups = None
 
 	@classmethod
 	def read_midi_file(cls, midi_filename):
@@ -398,9 +420,6 @@ class Looper:
 		seconds_per_process = self.client.blocksize / self.client.samplerate
 		self.beats_per_process = beats_per_second * seconds_per_process
 
-	def is_playing(self):
-		return self._real_process_callback is self._play_process_callback
-
 	def stop(self):
 		"""
 		Transitions to "_stop_process_callback", which sends "Note Off"
@@ -423,7 +442,7 @@ class Looper:
 	def _null_process_callback(self, frames):
 		pass
 
-	def _play_process_callback(self, frames):
+	def _play_process_callback(self, _):
 		self.out_port.clear_buffer()
 		if self.any_loop_active() and not self.loop_manipulation_lock.locked():
 			last_beat = self.beat + self.beats_per_process
@@ -440,7 +459,7 @@ class Looper:
 				last_beat -= self.beats_length
 				self.beat -= self.beats_length
 
-	def _stop_process_callback(self, frames):
+	def _stop_process_callback(self, _):
 		"""
 		Sends MIDI message "All Notes Off" (0x7B) to all channels from 0 - 15,
 		and then transitions to "_null_process_callback"
@@ -456,13 +475,13 @@ class Looper:
 	# -----------------------
 	# JACK callbacks
 
-	def _blocksize_callback(self, blocksize):
+	def _blocksize_callback(self, _):
 		"""
 		Called from jack client when blocksize changes.
 		"""
 		self._rescale()
 
-	def _samplerate_callback(self, samplerate):
+	def _samplerate_callback(self, _):
 		"""
 		Called from jack client when samplerate changes.
 		"""
@@ -479,7 +498,7 @@ class Looper:
 			self.stop_event.set()
 			raise CallbackExit
 
-	def _shutdown_callback(self, status, reason):
+	def _shutdown_callback(self, *_):
 		"""
 		The argument status is of type jack.Status.
 		"""
@@ -493,7 +512,6 @@ class Looper:
 		occurrence. The callback is supposed to raise CallbackExit on error.
 		"""
 		logging.debug('xrun: delayed %.2f microseconds', delayed_usecs)
-		pass
 
 
 class JackShutdownError(RuntimeError):
