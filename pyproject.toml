@@ -14,7 +14,7 @@ dynamic = ["version", "description"]
 dependencies = ["JACK-Client", "numpy", "appdirs", "progress", "mido", "midi_notes", "log_soso"]
 
 [project.optional-dependencies]
-qt = ["PyQt5", "soso_qt_extras"]
+qt = ["PyQt5", "soso_qt_extras >= 1.1.0"]
 
 [project.urls]
 Home = "https://github.com/Zen-Master-SoSo/jack_midi_looper"
