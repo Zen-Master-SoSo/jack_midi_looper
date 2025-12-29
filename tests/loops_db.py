@@ -1,4 +1,4 @@
-#  jack_midi_looper/test/loops_db.py
+#  jack_midi_looper/tests/loops_db.py
 #
 #  Copyright 2024 Leon Dionne <ldionne@dridesign.sh.cn>
 #
@@ -27,12 +27,11 @@ from jack_midi_looper import LoopsDB
 
 def main():
 	test_db_path = os.path.join(user_config_dir(), 'ZenSoSo', 'looper-tests.db')
-	print('using', test_db_path)
 	loops_db = LoopsDB(test_db_path)
 	if len(loops_db.loop_ids()) == 0:
 		loops_db.import_dirs(os.path.join(os.path.dirname(__file__), 'drum-loops'))
 	loop = loops_db.random_loop()
-	print('using loop', loop)
+	print('using', loop)
 	loop.print_events()
 
 
@@ -40,4 +39,4 @@ if __name__ == "__main__":
 	sys.exit(main())
 
 
-#  end jack_midi_looper/test/loops_db.py
+#  end jack_midi_looper/tests/loops_db.py

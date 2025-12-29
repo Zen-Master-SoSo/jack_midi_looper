@@ -1,4 +1,4 @@
-#  jack_midi_looper/test/gui_test.py
+#  jack_midi_looper/tests/gui_test.py
 #
 #  Copyright 2024 Leon Dionne <ldionne@dridesign.sh.cn>
 #
@@ -58,4 +58,4 @@ if __name__ == "__main__":
 	sys.exit(main())
 
 
-#  end jack_midi_looper/test/gui_test.py
+#  end jack_midi_looper/tests/gui_test.py

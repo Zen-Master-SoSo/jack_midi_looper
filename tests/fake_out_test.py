@@ -1,4 +1,4 @@
-#  jack_midi_looper/test/fake_out_test.py
+#  jack_midi_looper/tests/fake_out_test.py
 #
 #  Copyright 2024 Leon Dionne <ldionne@dridesign.sh.cn>
 #
@@ -87,4 +87,4 @@ if __name__ == "__main__":
 	sys.exit(main())
 
 
-#  end jack_midi_looper/test/fake_out_test.py
+#  end jack_midi_looper/tests/fake_out_test.py

@@ -33,6 +33,9 @@ from jack_midi_looper import Looper, LoopsDB
 
 
 class MainWindow(QMainWindow):
+	"""
+	Standalone Looper window.
+	"""
 
 	def __init__(self, dbfile = None):
 		super().__init__()
@@ -113,10 +116,8 @@ class LooperWidget(QFrame):
 			rows = len(new_loops) // self.columns + 1
 			ord_ = 0
 			for loop in new_loops:
-				button = LoopButton('{} ({}/4 - {} beats)'.format(
-						loop.name, loop.beats_per_measure,
-						loop.beats_per_measure * loop.measures),
-					self.frm_loops)
+				button = LoopButton(f'{loop.name} ({loop.beats_per_measure}/4 - ' + \
+					str(loop.beats_per_measure * loop.measures) + ' beats)', self.frm_loops)
 				button.setFont(self.loops_font)
 				button.setCheckable(True)
 				button.loop_id = loop.loop_id

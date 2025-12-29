@@ -41,6 +41,9 @@ USECS_PER_SECOND = 1000000
 
 
 class Loop:
+	"""
+	A collection of MIDI events timed by beat.
+	"""
 
 	def __init__(self, fetched_row):
 		self.loop_id, self.loop_group, self.name, \
@@ -84,15 +87,15 @@ class Loop:
 		return self.events[(self.events['beat'] >= start) & (self.events['beat'] < end)]
 
 	def __str__(self):
-		return '<Loop #{0.loop_id}: "{0.name}", {0.beats_per_measure} beats per measure, {0.measures} measures, {0.event_count} events>'.format(self)
+		return f'Loop #{self.loop_id}: "{self.name}", {self.beats_per_measure} beats per measure, ' + \
+			f'{self.measures} measures, {self.event_count} events'.format(self)
 
 	def print_events(self):
 		"""
 		Nicely formatted event printing
 		"""
-		for i, event in enumerate(self.events):
-			print("{:3d}: ".format(i), end = "")
-			print("{:.3f}  0x{:x} {} {}".format(event[0], *event[1]))
+		for i, evt in enumerate(self.events):
+			print(f'{i:3d}: {evt[0]:.3f}  0x{evt[1][0]:x} {evt[1][1]} {evt[1][2]}')
 
 
 class LoopsDB:
@@ -173,7 +176,7 @@ class LoopsDB:
 			INSERT INTO pitches VALUES (?,?)
 			"""
 		files = glob.glob(os.path.join(base_dir, '**' , '*.mid'), recursive=True)
-		with IncrementalBar('Importing loops', max=len(files)) as progress_bar:
+		with IncrementalBar('Importing loops', max = len(files)) as progress_bar:
 			for filename in files:
 				loop_group = re.sub(r'(_|[^\w])+', ' ', os.path.dirname(filename).replace(base_dir, '')).strip()
 				name = os.path.splitext(os.path.basename(filename))[0]
@@ -186,7 +189,7 @@ class LoopsDB:
 					cursor.executemany(pitch_sql, [ (cursor.lastrowid, pitch) for pitch in pitches ])
 					self._connection.commit()
 				except Exception as e:
-					print('Failed to import {}. ERROR {} "{}".'.format(name, type(e).__name__, e))
+					print(f'Failed to import {name}. ERROR {e.__class__.__name__} "{e}"')
 				progress_bar.next()
 		self._loop_names = None
 		self._groups = None
@@ -286,6 +289,10 @@ class LoopsDB:
 
 
 class Looper:
+	"""
+	A jack client which generates MIDI events by beat, not time,
+	utilizing "loops" imported from midi files.
+	"""
 
 	def __init__(self, client_name = 'looper'):
 		self.client_name = client_name
@@ -496,7 +503,7 @@ class Looper:
 		except Exception as e:
 			log_error(e)
 			self.stop_event.set()
-			raise CallbackExit
+			raise CallbackExit from e
 
 	def _shutdown_callback(self, *_):
 		"""
