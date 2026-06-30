@@ -18,7 +18,7 @@
 #  MA 02110-1301, USA.
 #
 """
-A Qt5 -based GUI.
+Shows a standalone looper window.
 """
 import os, sys, argparse, logging
 from functools import partial
@@ -162,9 +162,7 @@ class LoopButton(QPushButton):
 def main():
 
 	p = argparse.ArgumentParser()
-	p.epilog = """
-	Write your help text!
-	"""
+	p.epilog = __doc__
 	p.add_argument('Database', type=str, nargs='?', help='Loops database to load')
 	p.add_argument("--log-file", "-l", type=str, help="Log to this file")
 	p.add_argument("--verbose", "-v", action="store_true", help="Show more detailed debug information")
